@@ -27,7 +27,7 @@ def main(args=None):
 
     while True:
     # Make the asynchronous call.
-        inp = input("DataSender: Enter text to send to the VLM. Enter q to quit.")
+        inp = input("DataSender: Enter text to send to the VLM. Enter q to quit. ")
         if inp.lower() == 'q':
             break
         client.send_request(inp)
