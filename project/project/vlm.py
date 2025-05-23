@@ -1,15 +1,14 @@
-# subscribes to some overhead image of the rviz environment. 
-# subscribes to some node that gets text from the user
-# publishes goal node to navigate to
 #!/usr/bin/env python3
 
 import rclpy
 from rclpy.node import Node
 # from std_msgs.msg import String
+from geometry_msgs.msg import Pose2D
 import google
 print(dir(google))
 from google import genai
 from proj_msgs.srv import Text
+from proj_msgs.srv import ImgPath
 
 
 API_KEY = 'AIzaSyDAKdFtnAKaHSKAjeKSXytiRdvRbEx_qsY'
@@ -17,8 +16,11 @@ API_KEY = 'AIzaSyDAKdFtnAKaHSKAjeKSXytiRdvRbEx_qsY'
 class VLM(Node):
     def __init__(self):
         super().__init__('VLM')
-        # self.pub_goal = self.create_publisher(Float32, 'raw_latency', 10)
-        # self.timer_goal = self.create_timer(1, self.pub_goal_callback)
+        # TODO: Need to publish the goal pose to the right topic.
+        # Might be better as a service if possible.
+        self.pub_goal = self.create_publisher(Pose2D, 'TODO_GOAL', 10)
+        self.timer_goal = self.create_timer(1, self.pub_goal_callback)
+        self.img_srv = self.create_service(ImgPath, 'vlm_img', self.img_srv_callback)
         self.text_srv = self.create_service(Text, 'vlm_text', self.text_srv_callback)
         self.gemini_client = genai.Client(api_key=API_KEY)
         self.text_inp = None
@@ -26,16 +28,23 @@ class VLM(Node):
 
     def pub_goal_callback(self):
         txt = self.run_vlm()
-        # TODO: do some processing and get into goal pose
+        if txt is not None:
+            msg = Pose2D()
+            # TODO: do some processing and get into goal pose
+            self.pub_goal.publish(msg)
+        
 
     def run_vlm(self):
         if self.text_inp != None and self.img != None:
             out = self.gemini_client.models.generate_content(
-                model="gemini-2.5-flash", contents=[self.text_inp, self.img]
+                model="gemini-2.0-flash", contents=[self.text_inp, self.img]
             )
             self.text_inp = None
             self.img = None
+            self.get_logger().info(f'{out.text}')
+
             return out.text
+        return None
         
 
     def text_srv_callback(self, request, response):
@@ -48,6 +57,8 @@ class VLM(Node):
         return response
     
     def img_srv_callback(self, request, response):
+        print(f"got img request: {request.path}")
+        print(type(request.path))
         self.img = self.gemini_client.files.upload(file=request.path)
         return response
 

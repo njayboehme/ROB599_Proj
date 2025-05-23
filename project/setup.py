@@ -28,6 +28,7 @@ setup(
         'console_scripts': [
             'vlm = project.vlm:main',
             'text_client = project.text_client:main',
+            'camera_client = project.camera_client:main',
         ],
     },
 )

@@ -1,1 +1,0 @@
-# Node that gets an image from rviz. 
