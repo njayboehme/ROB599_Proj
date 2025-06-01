@@ -8,7 +8,7 @@ from vlm_nav_msgs.msg import BasePrompt
 import google
 from google import genai
 
-API_KEY = 'AIzaSyDAsLH_i4EGqpEzYmbLHsifmBd2x7H_jCU'
+API_KEY = ' '
 
 
 class VLM(Node):
@@ -25,16 +25,32 @@ class VLM(Node):
             self.base_prompt_callback
         )
 
+        # Subscribe to /task_feedback so we can use feedback as new prompt
+        self._feedback_sub = self.create_subscription(
+            String,
+            'task_feedback',
+            self.task_feedback_callback,
+            10
+        )
+
         # Gemini client
         self.gemini_client = genai.Client(api_key=API_KEY)
 
-        self.get_logger().info("VLM node ready; waiting for BasePromptService requests.")
+        # Stores the last text prompt (either initial or feedback)
+        self.text_inp = None
+        # Stores the last image, once uploaded
+        self.img = None
+        # Flag that feedback prompt has been received
+        self.feedback_prompt_received = False
+        # Flag that base prompt has been received
+        self.base_prompt_received = False
+
+        self.get_logger().info("VLM node ready; waiting for BasePromptService requests or task_feedback.")
 
     def base_prompt_callback(self, request, response):
         """
         Called whenever someone calls /base_prompt with a BasePrompt.
-        We immediately send the text+image to Gemini, then ask the user whether to publish.
-        Return success=True if published, False otherwise.
+        We immediately store the text + image, then ask Gemini for waypoints.
         """
         prompt: BasePrompt = request.prompt
         text = prompt.text.strip()
@@ -42,45 +58,73 @@ class VLM(Node):
 
         self.get_logger().info(f"Received BasePrompt:\n  text: {text}\n  image_path: {image_path}")
 
-        # 1) Upload image to Gemini
+        # Store text, upload image
+        self.text_inp = text
         try:
-            gen_image = self.gemini_client.files.upload(file=image_path)
+            self.img = self.gemini_client.files.upload(file=image_path)
         except Exception as e:
             self.get_logger().error(f"Failed to upload image '{image_path}': {e}")
             response.success = False
             return response
 
-        # 2) Query Gemini with [text, gen_image]
-        try:
+        # Flag that base prompt has been received
+        self.base_prompt_received = True
+
+        # Immediately call try_publish with initial prompt
+        self.try_publish()
+
+        response.success = True
+        return response
+
+    def task_feedback_callback(self, msg: String):
+        """
+        Called whenever problem_manager publishes on /task_feedback.
+        We take that JSON text as a new prompt and run try_publish() again.
+        """
+        feedback_text = msg.data.strip()
+        self.get_logger().info(f"Received task_feedback as new prompt: {feedback_text!r}")
+
+        # Store the received feedback as the new text_inp
+        self.text_inp = "After executing your plan, you received this feedback: " + feedback_text + " Use it to replan the waypoints."
+
+        # Flag that feedback prompt has been received
+        self.feedback_prompt_received = True
+
+        # Call try_publish, re-querying Gemini with the feedback as prompt
+        self.try_publish()
+
+    def try_publish(self):
+        """
+        If both text_inp and img are present, call Gemini and ask the user
+        whether to publish the resulting waypoint string. If the user replies 'y',
+        publish once and then reset text_inp & img to None so we only publish once per iteration.
+        """
+        if self.base_prompt_received or self.feedback_prompt_received:
             out = self.gemini_client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=[text, gen_image]
+                contents=[self.text_inp, self.img]
             )
-        except Exception as e:
-            self.get_logger().error(f"Gemini generate_content error: {e}")
-            response.success = False
-            return response
+            waypoint_str = out.text.strip()
+            self.get_logger().info(f"VLM ▶ {waypoint_str}")
 
-        waypoint_str = out.text.strip()  # e.g. "[(2,0),(2,3),(5,3),(7,7)]"
-        self.get_logger().info(f"VLM ▶ {waypoint_str}")
+            # Ask the user before publishing
+            try:
+                ans = input(f"Publish these waypoints? {waypoint_str}  (y/n): ").strip().lower()
+            except EOFError:
+                ans = 'n'
 
-        # 3) Ask the user whether to publish
-        try:
-            ans = input(f"Publish these waypoints? {waypoint_str}  (y/n): ").strip().lower()
-        except EOFError:
-            ans = 'n'
-
-        if ans == 'y':
-            msg = String()
-            msg.data = waypoint_str
-            self.vlm_waypoint_pub.publish(msg)
-            self.get_logger().info(f"Published VLM waypoints string: {waypoint_str}")
-            response.success = True
-        else:
-            self.get_logger().info("User chose not to publish.")
-            response.success = False
-
-        return response
+            if ans == 'y':
+                msg = String()
+                msg.data = waypoint_str
+                self.vlm_waypoint_pub.publish(msg)
+                self.get_logger().info(f"Published VLM waypoints string: {waypoint_str}")
+                # Reset so we only publish once per new prompt
+                self.text_inp = None
+                # self.img = None
+                self.feedback_prompt_received = False
+                self.base_prompt_received = False
+            else:
+                self.get_logger().info("User chose not to publish. Keeping inputs for later.")
 
 
 def main(args=None):

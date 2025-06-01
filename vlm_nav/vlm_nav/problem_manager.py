@@ -6,9 +6,11 @@ A ROS 2 Python node that:
   • Subscribes to /vlm_waypoints (std_msgs/String).
   • Parses the incoming JSON‐style array of waypoints (possibly wrapped in markdown fences).
   • Converts to geometry_msgs/Point list and sends to nav_game via an ActionClient.
-  • Prints every feedback message (the growing trajectory).
-  • Prints the final result (successful_waypoints).
-  • Stays alive after each goal, ready for the next waypoints.
+  • Collects all feedback (trajectory) internally.
+  • Upon receiving the final result, publishes a single JSON message containing:
+      - "trajectory": the full list of cells visited
+      - "successful_waypoints": the list of waypoints reached
+  • Remains alive, ready for the next waypoints.
 """
 
 import rclpy
@@ -19,11 +21,15 @@ from nav_game_msgs.action import Waypoints
 from geometry_msgs.msg import Point
 import re
 import ast
+import json  # To format combined feedback + result as JSON
 
 
 class ProblemManager(Node):
     def __init__(self):
         super().__init__('problem_manager')
+
+        # Publisher for combined trajectory + result (as JSON text)
+        self._feedback_pub = self.create_publisher(String, 'task_feedback', 10)
 
         # Create the ActionClient for 'waypoints'
         self._client = ActionClient(self, Waypoints, 'waypoints')
@@ -38,6 +44,9 @@ class ProblemManager(Node):
 
         # Will hold the current goal handle
         self._goal_handle = None
+
+        # Store every feedback trajectory update here
+        self._full_trajectory = []
 
         self.get_logger().info('Waiting for /vlm_waypoints messages to parse and send to nav_game...')
 
@@ -82,6 +91,9 @@ class ProblemManager(Node):
         waypoint_list = [(int(pt[0]), int(pt[1])) for pt in parsed]
         self.get_logger().info(f'Parsed waypoints: {waypoint_list}')
 
+        # Clear any previous trajectory
+        self._full_trajectory = []
+
         # Now send that as a goal
         self.send_goal(waypoint_list)
 
@@ -121,20 +133,33 @@ class ProblemManager(Node):
     def feedback_callback(self, feedback_msg):
         """
         Called whenever the action server publishes feedback.
-        Print the current trajectory.
+        Append the current trajectory update to _full_trajectory.
         """
         trajectory = feedback_msg.feedback.trajectory
         simple_list = [(int(pt.x), int(pt.y)) for pt in trajectory]
         self.get_logger().info(f'[FEEDBACK] trajectory so far: {simple_list}')
 
+        # Update our full trajectory; overwrite with the latest entire list
+        self._full_trajectory = simple_list
+
     def get_result_callback(self, future):
         """
         Called once when nav_game sets the final result.
-        Print the successful_waypoints and then reset _goal_handle so we can accept a new goal.
+        Print and publish the combined feedback + result, then reset for the next goal.
         """
         result = future.result().result
         success_list = [(int(pt.x), int(pt.y)) for pt in result.successful_waypoints]
         self.get_logger().info(f'[RESULT] successful_waypoints: {success_list}')
+
+        # Build a single JSON dict containing the entire feedback trajectory and the final successful waypoints
+        combined = {
+            "trajectory": self._full_trajectory,
+            "successful_waypoints": success_list
+        }
+        text_msg = String()
+        text_msg.data = json.dumps(combined)
+        self._feedback_pub.publish(text_msg)
+        self.get_logger().info(f'Published combined feedback+result: {combined}')
 
         # Clear the goal handle so the node remains alive for the next set of waypoints
         self._goal_handle = None
@@ -149,7 +174,7 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        # Do not call rclpy.shutdown() here; the node remains alive until manually terminated.
+        # No rclpy.shutdown() here; node persists until manually terminated.
 
 
 if __name__ == '__main__':
