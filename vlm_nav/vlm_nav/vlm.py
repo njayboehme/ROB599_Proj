@@ -8,7 +8,7 @@ from vlm_nav_msgs.msg import BasePrompt
 import google
 from google import genai
 
-API_KEY = ''
+API_KEY = 'AIzaSyDAsLH_i4EGqpEzYmbLHsifmBd2x7H_jCU'
 
 
 class VLM(Node):
