@@ -4,7 +4,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import Header
-from proj_msgs.srv import ImgPath
+from vlm_nav_msgs.srv import ImgPath
 from cv_bridge import CvBridge
 import cv2
 import os
@@ -19,7 +19,7 @@ class CameraNode(Node):
         self.b = CvBridge()
 
         # TESTING
-        test_img_path = '/home/nboehme/Desktop/ROB599_Proj/proj_ws/src/project/test_img.jpg'
+        test_img_path = '/home/raghav/Downloads/lebron.jpg'
         cv_img = cv2.imread(test_img_path)
         print(type(cv_img))
         header = Header()

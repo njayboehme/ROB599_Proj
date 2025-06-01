@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 
-from proj_msgs.srv import Text
+from vlm_nav_msgs.srv import Text
 
 
 class TextNode(Node):

@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'project'
+package_name = 'vlm_nav'
 
 setup(
     name=package_name,
@@ -26,9 +26,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'vlm = project.vlm:main',
-            'text_client = project.text_client:main',
-            'camera_client = project.camera_client:main',
+            'vlm = vlm_nav.vlm:main',
+            'text_client = vlm_nav.text_client:main',
+            'camera_client = vlm_nav.camera_client:main',
         ],
     },
 )

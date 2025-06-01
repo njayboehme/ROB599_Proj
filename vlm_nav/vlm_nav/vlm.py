@@ -7,11 +7,11 @@ from geometry_msgs.msg import Pose2D
 import google
 print(dir(google))
 from google import genai
-from proj_msgs.srv import Text
-from proj_msgs.srv import ImgPath
+from vlm_nav_msgs.srv import Text
+from vlm_nav_msgs.srv import ImgPath
 
 
-API_KEY = 'AIzaSyDAKdFtnAKaHSKAjeKSXytiRdvRbEx_qsY'
+API_KEY = 'YOUR KEY'
 
 class VLM(Node):
     def __init__(self):
@@ -50,10 +50,6 @@ class VLM(Node):
     def text_srv_callback(self, request, response):
         print(f"got request: {request.inp}")
         self.text_inp = request.inp
-        # out = self.gemini_client.models.generate_content(
-        #     model="gemini-2.5-flash", contents=request.inp
-        # )
-        # print(out.text)
         return response
     
     def img_srv_callback(self, request, response):

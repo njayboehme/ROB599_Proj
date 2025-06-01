@@ -1,0 +1,8 @@
+# Request: a list of goal waypoints
+geometry_msgs/Point[] waypoints
+---
+# Result: the list of waypoints that were successfully reached
+geometry_msgs/Point[] successful_waypoints
+---
+# Feedback: the full trajectory (cell-centers) covered so far
+geometry_msgs/Point[] trajectory
