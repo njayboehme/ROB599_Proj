@@ -7,7 +7,7 @@ import google
 from google import genai
 from vlm_nav_msgs.srv import Text, ImgPath
 
-API_KEY = 'xyz'
+API_KEY = 'AIzaSyCW_VwkFmYB1MzwaII0eTalkGt65nH8g7M'
 
 class VLM(Node):
     def __init__(self):
@@ -28,8 +28,9 @@ class VLM(Node):
 
     def try_publish(self):
         """
-        If both text_inp and img are present, call Gemini and publish the result once.
-        Then reset text_inp and img to None.
+        If both text_inp and img are present, call Gemini and ask the user
+        whether to publish the resulting waypoint string. If the user replies 'y',
+        publish once and then reset text_inp/img to None. Otherwise, do nothing.
         """
         if self.text_inp is not None and self.img is not None:
             out = self.gemini_client.models.generate_content(
@@ -39,14 +40,23 @@ class VLM(Node):
             waypoint_str = out.text.strip()  # e.g. "[(2,0),(2,3),(5,3),(7,7)]"
             self.get_logger().info(f"VLM ▶ {waypoint_str}")
 
-            msg = String()
-            msg.data = waypoint_str
-            self.vlm_waypoint_pub.publish(msg)
-            self.get_logger().info(f"Published VLM waypoints string: {waypoint_str}")
+            # Ask the user before publishing
+            try:
+                ans = input(f"Publish these waypoints? {waypoint_str}  (y/n): ").strip().lower()
+            except EOFError:
+                # If stdin is closed or unavailable, default to skip
+                ans = 'n'
 
-            # Reset so we only publish once per new pair
-            self.text_inp = None
-            self.img = None
+            if ans == 'y':
+                msg = String()
+                msg.data = waypoint_str
+                self.vlm_waypoint_pub.publish(msg)
+                self.get_logger().info(f"Published VLM waypoints string: {waypoint_str}")
+                # Reset so we only publish once per new pair
+                self.text_inp = None
+                self.img = None
+            else:
+                self.get_logger().info("User chose not to publish. Keeping inputs for later.")
 
     def text_srv_callback(self, request, response):
         """
