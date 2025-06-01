@@ -15,6 +15,8 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Text.srv"
   "srv/ImgPath.srv"
+  "msg/BasePrompt.msg"
+  "srv/BasePromptService.srv"
  )
 
 

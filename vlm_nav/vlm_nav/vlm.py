@@ -3,80 +3,85 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
+from vlm_nav_msgs.srv import BasePromptService
+from vlm_nav_msgs.msg import BasePrompt
 import google
 from google import genai
-from vlm_nav_msgs.srv import Text, ImgPath
 
-API_KEY = 'AIzaSyCW_VwkFmYB1MzwaII0eTalkGt65nH8g7M'
+API_KEY = ''
+
 
 class VLM(Node):
     def __init__(self):
         super().__init__('VLM')
 
-        # Publisher for the waypoint‐string (only when ready)
+        # Publisher for the waypoint‐string (only when approved by user)
         self.vlm_waypoint_pub = self.create_publisher(String, 'vlm_waypoints', 10)
 
-        # Services to receive text and image inputs
-        self.text_srv = self.create_service(Text, 'vlm_text', self.text_srv_callback)
-        self.img_srv = self.create_service(ImgPath, 'vlm_img', self.img_srv_callback)
+        # Single service that receives a BasePrompt (text + image_path)
+        self.base_prompt_srv = self.create_service(
+            BasePromptService,
+            'base_prompt',
+            self.base_prompt_callback
+        )
 
+        # Gemini client
         self.gemini_client = genai.Client(api_key=API_KEY)
-        self.text_inp = None
-        self.img = None
 
-        self.get_logger().info("VLM node ready; waiting for text+image services.")
+        self.get_logger().info("VLM node ready; waiting for BasePromptService requests.")
 
-    def try_publish(self):
+    def base_prompt_callback(self, request, response):
         """
-        If both text_inp and img are present, call Gemini and ask the user
-        whether to publish the resulting waypoint string. If the user replies 'y',
-        publish once and then reset text_inp/img to None. Otherwise, do nothing.
+        Called whenever someone calls /base_prompt with a BasePrompt.
+        We immediately send the text+image to Gemini, then ask the user whether to publish.
+        Return success=True if published, False otherwise.
         """
-        if self.text_inp is not None and self.img is not None:
+        prompt: BasePrompt = request.prompt
+        text = prompt.text.strip()
+        image_path = prompt.image_path.strip()
+
+        self.get_logger().info(f"Received BasePrompt:\n  text: {text}\n  image_path: {image_path}")
+
+        # 1) Upload image to Gemini
+        try:
+            gen_image = self.gemini_client.files.upload(file=image_path)
+        except Exception as e:
+            self.get_logger().error(f"Failed to upload image '{image_path}': {e}")
+            response.success = False
+            return response
+
+        # 2) Query Gemini with [text, gen_image]
+        try:
             out = self.gemini_client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=[self.text_inp, self.img]
+                contents=[text, gen_image]
             )
-            waypoint_str = out.text.strip()  # e.g. "[(2,0),(2,3),(5,3),(7,7)]"
-            self.get_logger().info(f"VLM ▶ {waypoint_str}")
+        except Exception as e:
+            self.get_logger().error(f"Gemini generate_content error: {e}")
+            response.success = False
+            return response
 
-            # Ask the user before publishing
-            try:
-                ans = input(f"Publish these waypoints? {waypoint_str}  (y/n): ").strip().lower()
-            except EOFError:
-                # If stdin is closed or unavailable, default to skip
-                ans = 'n'
+        waypoint_str = out.text.strip()  # e.g. "[(2,0),(2,3),(5,3),(7,7)]"
+        self.get_logger().info(f"VLM ▶ {waypoint_str}")
 
-            if ans == 'y':
-                msg = String()
-                msg.data = waypoint_str
-                self.vlm_waypoint_pub.publish(msg)
-                self.get_logger().info(f"Published VLM waypoints string: {waypoint_str}")
-                # Reset so we only publish once per new pair
-                self.text_inp = None
-                self.img = None
-            else:
-                self.get_logger().info("User chose not to publish. Keeping inputs for later.")
+        # 3) Ask the user whether to publish
+        try:
+            ans = input(f"Publish these waypoints? {waypoint_str}  (y/n): ").strip().lower()
+        except EOFError:
+            ans = 'n'
 
-    def text_srv_callback(self, request, response):
-        """
-        Called when a client sends a Text request.
-        Store request.inp, then attempt to publish if image already exists.
-        """
-        self.get_logger().info(f"Received text input: {request.inp}")
-        self.text_inp = request.inp
-        self.try_publish()
+        if ans == 'y':
+            msg = String()
+            msg.data = waypoint_str
+            self.vlm_waypoint_pub.publish(msg)
+            self.get_logger().info(f"Published VLM waypoints string: {waypoint_str}")
+            response.success = True
+        else:
+            self.get_logger().info("User chose not to publish.")
+            response.success = False
+
         return response
-    
-    def img_srv_callback(self, request, response):
-        """
-        Called when a client sends an ImgPath request.
-        Upload the image, then attempt to publish if text already exists.
-        """
-        self.get_logger().info(f"Received image path: {request.path}")
-        self.img = self.gemini_client.files.upload(file=request.path)
-        self.try_publish()
-        return response
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -88,6 +93,7 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

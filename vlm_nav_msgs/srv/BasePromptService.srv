@@ -1,0 +1,5 @@
+# Request: a single BasePrompt (text + image_path)
+vlm_nav_msgs/BasePrompt prompt
+---
+# Response: whether we successfully queued/published it
+bool success

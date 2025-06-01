@@ -21,7 +21,8 @@ setup(
         'setuptools',
         'geometry_msgs',
         'nav_game_msgs',
-        'nav_game'
+        'nav_game',
+        'vlm_nav_msgs'
     ],
     zip_safe=True,
     maintainer='nboehme',
@@ -34,7 +35,8 @@ setup(
             'vlm = vlm_nav.vlm:main',
             'text_client = vlm_nav.text_client:main',
             'camera_client = vlm_nav.camera_client:main',
-            'problem_manager = vlm_nav.problem_manager:main'
+            'problem_manager = vlm_nav.problem_manager:main',
+            'base_prompter = vlm_nav.base_prompter:main'
         ],
     },
 )
