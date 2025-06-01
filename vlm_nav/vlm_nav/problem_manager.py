@@ -8,7 +8,7 @@ A ROS 2 Python node that:
   • Converts to geometry_msgs/Point list and sends to nav_game via an ActionClient.
   • Prints every feedback message (the growing trajectory).
   • Prints the final result (successful_waypoints).
-  • Shuts down once the result is received.
+  • Stays alive after each goal, ready for the next waypoints.
 """
 
 import rclpy
@@ -130,12 +130,14 @@ class ProblemManager(Node):
     def get_result_callback(self, future):
         """
         Called once when nav_game sets the final result.
-        Print the successful_waypoints and then shut down.
+        Print the successful_waypoints and then reset _goal_handle so we can accept a new goal.
         """
         result = future.result().result
         success_list = [(int(pt.x), int(pt.y)) for pt in result.successful_waypoints]
         self.get_logger().info(f'[RESULT] successful_waypoints: {success_list}')
-        rclpy.shutdown()
+
+        # Clear the goal handle so the node remains alive for the next set of waypoints
+        self._goal_handle = None
 
 
 def main(args=None):
@@ -147,7 +149,7 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # Do not call rclpy.shutdown() here; the node remains alive until manually terminated.
 
 
 if __name__ == '__main__':
