@@ -11,7 +11,7 @@ from vlm_nav_msgs.srv import Text
 from vlm_nav_msgs.srv import ImgPath
 
 
-API_KEY = 'YOUR KEY'
+API_KEY = 'AIzaSyCW_VwkFmYB1MzwaII0eTalkGt65nH8g7M'
 
 class VLM(Node):
     def __init__(self):
