@@ -14,6 +14,7 @@ A ROS 2 “Jazzy”-style action server node. When launched, it:
   • After any violation, the game resets to START_CELL and awaits a new goal.
   • When a run completes (either due to violation or full success), it returns the list of successfully reached waypoints.
   • The red goal square is always drawn at a single static location (STATIC_GOAL).
+  • **Now also redraws the player immediately after each step, so you can see the circle move in real time.**
 """
 
 import rclpy
@@ -257,6 +258,9 @@ class NavGameActionServer(Node):
                 with self._lock:
                     self.current_cell = next_cell
 
+                # **Immediately redraw so user sees the circle move step by step**
+                self._redraw_now()
+
             # Reached this waypoint successfully
             successful_tuples.append(wp)
             # We do NOT update self.goal_cell here, since the red goal is static.
@@ -277,6 +281,24 @@ class NavGameActionServer(Node):
         goal_handle.succeed()
         return result
 
+    def _redraw_now(self):
+        """
+        Redraw the entire frame immediately, so that each move is visible in real time.
+        """
+        # Clear and draw background
+        self.screen.fill(GRAY)
+        draw_grid(self.screen)
+
+        # Draw the static red goal
+        draw_goal(self.screen, self.goal_cell)
+
+        # Draw the blue player circle at its current position
+        with self._lock:
+            draw_player(self.screen, self.current_cell)
+
+        pygame.display.flip()
+        # We do NOT call clock.tick() here, because we only want one immediate frame
+
     def _pygame_loop(self):
         """
         Called at ~30 Hz by a ROS 2 timer.
@@ -290,14 +312,10 @@ class NavGameActionServer(Node):
                 rclpy.shutdown()
                 return
 
-        # Draw background
+        # Draw background and player each tick
         self.screen.fill(GRAY)
         draw_grid(self.screen)
-
-        # Draw the static red goal
         draw_goal(self.screen, self.goal_cell)
-
-        # Draw the blue player circle
         with self._lock:
             draw_player(self.screen, self.current_cell)
 
