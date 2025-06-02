@@ -85,7 +85,7 @@ class VLM(Node):
         self.get_logger().info(f"Received task_feedback as new prompt: {feedback_text!r}")
 
         # Store the received feedback as the new text_inp
-        self.text_inp = "After executing your plan, you received this feedback: " + feedback_text + " Use it to replan the waypoints."
+        self.text_inp = "After executing your plan, you received this feedback: " + feedback_text + " Use it to replan the waypoints. Make sure to accurately follow your original instructions. Do not provide an explanation."
 
         # Flag that feedback prompt has been received
         self.feedback_prompt_received = True
