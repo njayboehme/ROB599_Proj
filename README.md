@@ -2,6 +2,9 @@
 
 This project implements an end-to-end ROS 2 system to leverage the semantic reasoning ability of VLMs to guide a robot's path planning in a 2D maze.
 
+## System diagram
+![image](assets/system_diagram.png)
+
 ## How to run this project locally
 1. Create a new ROS 2 workspace and an `src` directory in its root.
 2. Navigate to the `src` directy with `cd src` and clone this repository.
